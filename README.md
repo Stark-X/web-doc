@@ -86,7 +86,7 @@ web-doc/
 │           └── store/          # Zustand stores (auth, docs, aiChat)
 ├── deploy/nginx/               # nginx config for production reverse-proxy
 ├── storage/docs/               # default document storage root (one folder per doc)
-├── docker-compose.full.yml     # Postgres + server + nginx
+├── docker-compose.yml          # Postgres + server + nginx
 ├── Dockerfile                  # multi-stage build (web + api → single image)
 └── package.json                # root workspace scripts (concurrently)
 ```
@@ -131,16 +131,16 @@ The Go server will serve the SPA, the REST API, document static assets, and the 
 ### Option C — Docker Compose (recommended for self-hosting)
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose up -d --build
 ```
 
-This brings up:
+This builds the local `server` image from `Dockerfile` and brings up:
 
 - `postgres` — PostgreSQL 16
-- `server` — the Web-Doc Go server (built from `Dockerfile`, multi-stage)
+- `server` — the Web-Doc Go server (built locally from `Dockerfile`, multi-stage)
 - `nginx` — reverse proxy on `:80` (configure under `deploy/nginx/`)
 
-Document files persist in the `docs` named volume; the database persists in `pgdata`.
+Document files persist in the `docs` named volume; the database persists in `pgdata`. If you publish a public image (for example on GHCR or Docker Hub), you can add that public `image:` name to the `server` service and run `docker compose pull && docker compose up -d` instead.
 
 ---
 

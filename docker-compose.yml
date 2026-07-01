@@ -6,7 +6,6 @@ services:
       args:
         # 默认单容器直接挂在域名根下；如配合 nginx 反代到 /doc/，请使用 docker-compose.nginx.yml。
         VITE_BASE: "/"
-    image: uswccr.ccs.tencentyun.com/xiaofeng/web-doc:latest
     container_name: web-doc-server
     restart: unless-stopped
     environment:

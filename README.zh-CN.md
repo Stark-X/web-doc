@@ -86,7 +86,7 @@ web-doc/
 │           └── store/          # Zustand 状态（auth、docs、aiChat）
 ├── deploy/nginx/               # 生产环境的 nginx 配置
 ├── storage/docs/               # 默认文档存储根目录（每个文档一个子目录）
-├── docker-compose.full.yml     # Postgres + server + nginx 全家桶
+├── docker-compose.yml          # Postgres + server + nginx 全家桶
 ├── Dockerfile                  # 多阶段构建（web + api → 单镜像）
 └── package.json                # 根工作区脚本（concurrently）
 ```
@@ -131,16 +131,16 @@ Go 服务会在同一个端口（默认 `:8787`）上同时提供 SPA、REST API
 ### 方式 C — Docker Compose（推荐自托管使用）
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose up -d --build
 ```
 
-这将启动：
+这会基于本地 `Dockerfile` 构建 `server` 镜像，并启动：
 
 - `postgres` — PostgreSQL 16
-- `server` — Web-Doc Go 服务（基于 `Dockerfile` 多阶段构建）
+- `server` — Web-Doc Go 服务（基于本地 `Dockerfile` 多阶段构建）
 - `nginx` — `:80` 反向代理（配置位于 `deploy/nginx/`）
 
-文档文件持久化到名为 `docs` 的 volume；数据库持久化到 `pgdata`。
+文档文件持久化到名为 `docs` 的 volume；数据库持久化到 `pgdata`。如果后续发布公开镜像（例如 GHCR 或 Docker Hub），也可以在 `server` 服务中添加公开的 `image:` 名称，然后改用 `docker compose pull && docker compose up -d`。
 
 ---
 
