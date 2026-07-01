@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
-	Addr             string
-	StorageDir       string
-	DSN              string
-	WebRoot          string
-	MaxUploadMB      int64
-	AllowOrigin      string
-	JWTSecret        string
-	DisableRegister  bool
+	Addr            string
+	StorageDir      string
+	DSN             string
+	DBDriver        string
+	SQLitePath      string
+	WebRoot         string
+	MaxUploadMB     int64
+	AllowOrigin     string
+	JWTSecret       string
+	DisableRegister bool
 }
 
 func Load() *Config {
@@ -25,6 +28,8 @@ func Load() *Config {
 		Addr:            getEnv("WEBDOC_ADDR", ":8787"),
 		StorageDir:      abs,
 		DSN:             buildDSN(),
+		DBDriver:        dbDriver(),
+		SQLitePath:      getEnv("WEBDOC_SQLITE_PATH", "/data/webdoc.db"),
 		WebRoot:         getEnv("WEBDOC_WEB_ROOT", ""),
 		MaxUploadMB:     50,
 		AllowOrigin:     getEnv("WEBDOC_ORIGIN", "*"),
@@ -33,10 +38,13 @@ func Load() *Config {
 	}
 }
 
-// buildDSN 优先使用 WEBDOC_DSN；否则根据 PG* 环境变量组装。
+// buildDSN 优先使用 WEBDOC_DSN；否则根据 WEBDOC_DB_DRIVER 选择 SQLite 或 PostgreSQL。
 func buildDSN() string {
 	if dsn := os.Getenv("WEBDOC_DSN"); dsn != "" {
 		return dsn
+	}
+	if dbDriver() != "postgres" {
+		return getEnv("WEBDOC_SQLITE_PATH", "/data/webdoc.db")
 	}
 	host := getEnv("WEBDOC_PG_HOST", "127.0.0.1")
 	port := getEnv("WEBDOC_PG_PORT", "5432")
@@ -47,6 +55,13 @@ func buildDSN() string {
 	tz := getEnv("WEBDOC_PG_TZ", "UTC")
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
 		host, port, user, pass, name, ssl, tz)
+}
+
+func dbDriver() string {
+	if driver := os.Getenv("WEBDOC_DB_DRIVER"); driver != "" {
+		return strings.ToLower(driver)
+	}
+	return strings.ToLower(getEnv("WEBDOC_DB_TYPE", "sqlite"))
 }
 
 func getEnv(k, def string) string {
