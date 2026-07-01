@@ -20,6 +20,7 @@ import (
 func main() {
 	cfg := config.Load()
 	log.Printf("[web-doc] storage dir: %s", cfg.StorageDir)
+	log.Printf("[web-doc] db driver:   %s", cfg.DBDriver)
 	log.Printf("[web-doc] listening:   %s", cfg.Addr)
 	if cfg.WebRoot != "" {
 		log.Printf("[web-doc] web root:    %s", cfg.WebRoot)
@@ -29,7 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d, err := db.Open(cfg.DSN)
+	d, err := db.Open(cfg.DBDriver, cfg.DSN)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -128,6 +129,8 @@ func main() {
 	// 前端静态资源（SPA），放在所有 API 路由之后
 	if cfg.WebRoot != "" {
 		mountFrontend(app, cfg.WebRoot)
+	} else {
+		mountNotFound(app)
 	}
 
 	if err := app.Run(cfg.Addr); err != nil {
@@ -151,6 +154,16 @@ func splitAndTrim(s string) []string {
 	return out
 }
 
+func mountNotFound(app *gin.Engine) {
+	app.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			return
+		}
+		c.AbortWithStatus(http.StatusNotFound)
+	})
+}
+
 // mountFrontend 把前端构建产物挂载到根路径，并支持 SPA fallback：
 // 当请求的文件不存在时，回落到 index.html，由前端路由处理。
 func mountFrontend(app *gin.Engine, webRoot string) {
@@ -164,6 +177,11 @@ func mountFrontend(app *gin.Engine, webRoot string) {
 	backendPrefixes := []string{"/api", "/d/", "/ws", "/healthz", "/mcp"}
 
 	app.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			return
+		}
+
 		p := c.Request.URL.Path
 		for _, pre := range backendPrefixes {
 			if strings.HasPrefix(p, pre) {

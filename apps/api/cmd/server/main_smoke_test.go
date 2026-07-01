@@ -43,6 +43,11 @@ func TestRouteWiring(t *testing.T) {
 	// 模拟 NoRoute (SPA fallback)
 	backendPrefixes := []string{"/api", "/d/", "/ws", "/healthz", "/mcp"}
 	app.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			return
+		}
+
 		p := c.Request.URL.Path
 		for _, pre := range backendPrefixes {
 			if len(p) >= len(pre) && p[:len(pre)] == pre {

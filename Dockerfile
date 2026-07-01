@@ -7,6 +7,9 @@ FROM node:20-alpine AS web-builder
 
 WORKDIR /web
 
+ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
+
 # 利用 layer cache：先拷依赖文件
 COPY apps/web/package.json apps/web/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -27,7 +30,8 @@ FROM golang:1.22-alpine AS api-builder
 WORKDIR /src/api
 
 # 启用 module 缓存
-ENV CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=mod
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=mod GOPROXY=${GOPROXY}
 
 COPY apps/api/go.mod apps/api/go.sum ./
 RUN go mod download
@@ -51,12 +55,14 @@ COPY --from=api-builder /out/web-doc /app/web-doc
 # 前端构建产物
 COPY --from=web-builder /web/dist /app/web
 
-# 数据目录（文档存储）
+# 数据目录（SQLite 数据库 + 文档存储）
 RUN mkdir -p /data/docs && chown -R app:app /app /data
 
 USER app
 
 ENV WEBDOC_ADDR=:8787 \
+    WEBDOC_DB_DRIVER=sqlite \
+    WEBDOC_DB_PATH=/data/webdoc.db \
     WEBDOC_STORAGE=/data/docs \
     WEBDOC_WEB_ROOT=/app/web \
     WEBDOC_ORIGIN=*

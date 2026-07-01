@@ -74,7 +74,7 @@ web-doc/
 │   │       ├── ai/             # OpenAI-compatible streaming client
 │   │       ├── auth/           # JWT helpers
 │   │       ├── config/         # env-driven configuration
-│   │       ├── db/             # GORM + Postgres
+│   │       ├── db/             # GORM + SQLite (Postgres optional)
 │   │       ├── handler/        # HTTP handlers (REST, MCP, auth, AI reorder)
 │   │       ├── model/          # GORM models + seed
 │   │       ├── storage/        # filesystem abstraction (per-doc folder)
@@ -84,9 +84,8 @@ web-doc/
 │           ├── components/     # AIChatPanel, AISettingsDialog, DocTree, DocViewer, ...
 │           ├── pages/          # HomePage, SharePage
 │           └── store/          # Zustand stores (auth, docs, aiChat)
-├── deploy/nginx/               # nginx config for production reverse-proxy
 ├── storage/docs/               # default document storage root (one folder per doc)
-├── docker-compose.full.yml     # Postgres + server + nginx
+├── docker-compose.yml          # server + SQLite
 ├── Dockerfile                  # multi-stage build (web + api → single image)
 └── package.json                # root workspace scripts (concurrently)
 ```
@@ -97,17 +96,11 @@ web-doc/
 
 ### Option A — Local development (one command)
 
-Requires **Node ≥ 18** and **Go ≥ 1.21**, plus a running **PostgreSQL** instance.
+Requires **Node ≥ 18** and **Go ≥ 1.21**. SQLite is used by default; no external database is required.
 
 ```bash
 # Install deps for the root and the web app
 npm run install:all
-
-# Set DB credentials (or rely on defaults: 127.0.0.1:5432 / webdoc / webdoc / webdoc)
-export WEBDOC_PG_HOST=127.0.0.1
-export WEBDOC_PG_USER=webdoc
-export WEBDOC_PG_PASSWORD=webdoc
-export WEBDOC_PG_DB=webdoc
 
 # Start API (:8787) and Web (:5173) concurrently
 npm run dev
@@ -131,16 +124,10 @@ The Go server will serve the SPA, the REST API, document static assets, and the 
 ### Option C — Docker Compose (recommended for self-hosting)
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose up -d
 ```
 
-This brings up:
-
-- `postgres` — PostgreSQL 16
-- `server` — the Web-Doc Go server (built from `Dockerfile`, multi-stage)
-- `nginx` — reverse proxy on `:80` (configure under `deploy/nginx/`)
-
-Document files persist in the `docs` named volume; the database persists in `pgdata`.
+This builds the Web-Doc image locally from `Dockerfile` and starts the Go server on <http://localhost:8787>. Document files and the SQLite database persist in the `data` named volume.
 
 ---
 
@@ -156,8 +143,10 @@ All configuration is done through environment variables.
 | `WEBDOC_ORIGIN` | `*` | CORS allow-list (comma-separated; `*` = allow all). |
 | `WEBDOC_JWT_SECRET` | _(insecure default)_ | **Change in production.** HMAC secret for JWT. |
 | `WEBDOC_DISABLE_REGISTER` | _(unset)_ | Set to `1` to disable the public registration endpoint. |
-| `WEBDOC_DSN` | _(unset)_ | Full Postgres DSN; if set, overrides the `WEBDOC_PG_*` variables. |
-| `WEBDOC_PG_HOST` | `127.0.0.1` | Postgres host. |
+| `WEBDOC_DB_DRIVER` | `sqlite` | Database driver: `sqlite` or `postgres`. |
+| `WEBDOC_DB_PATH` | `../../storage/webdoc.db` | SQLite database file path. |
+| `WEBDOC_DSN` | _(unset)_ | Full database DSN; if set, the driver is inferred unless `WEBDOC_DB_DRIVER` is also set. |
+| `WEBDOC_PG_HOST` | `127.0.0.1` | Postgres host, only used when `WEBDOC_DB_DRIVER=postgres` and `WEBDOC_DSN` is unset. |
 | `WEBDOC_PG_PORT` | `5432` | Postgres port. |
 | `WEBDOC_PG_USER` | `webdoc` | Postgres user. |
 | `WEBDOC_PG_PASSWORD` | `webdoc` | Postgres password. |
@@ -210,9 +199,9 @@ Per-document upload size is capped at **50 MB** by default (see `MaxUploadMB` in
 | Layer | Tech |
 |---|---|
 | Frontend | React 19 · Vite · TypeScript · TailwindCSS · shadcn/ui · Zustand · React Router · **Monaco Editor** · **dnd-kit** |
-| Backend  | Go · **Gin** · **GORM** · **PostgreSQL** · `fsnotify` · `gorilla/websocket` · JWT |
-| Storage  | Local filesystem (per-doc folder) + PostgreSQL (metadata, users, AI settings, prompts, MCP tokens) |
-| Deploy   | Single Go binary · Docker · Docker Compose · Nginx |
+| Backend  | Go · **Gin** · **GORM** · **SQLite** (Postgres optional) · `fsnotify` · `gorilla/websocket` · JWT |
+| Storage  | Local filesystem (per-doc folder) + SQLite by default (metadata, users, AI settings, prompts, MCP tokens) |
+| Deploy   | Single Go binary · Docker · Docker Compose · optional external reverse proxy |
 
 ---
 

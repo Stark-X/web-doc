@@ -74,7 +74,7 @@ web-doc/
 │   │       ├── ai/             # OpenAI 兼容的流式客户端
 │   │       ├── auth/           # JWT 工具
 │   │       ├── config/         # 基于环境变量的配置
-│   │       ├── db/             # GORM + Postgres
+│   │       ├── db/             # GORM + SQLite（可选 Postgres）
 │   │       ├── handler/        # HTTP 处理器（REST、MCP、认证、AI 重排）
 │   │       ├── model/          # GORM 模型 + 初始数据
 │   │       ├── storage/        # 文件系统抽象（每个文档一个目录）
@@ -84,9 +84,8 @@ web-doc/
 │           ├── components/     # AIChatPanel、AISettingsDialog、DocTree、DocViewer 等
 │           ├── pages/          # HomePage、SharePage
 │           └── store/          # Zustand 状态（auth、docs、aiChat）
-├── deploy/nginx/               # 生产环境的 nginx 配置
 ├── storage/docs/               # 默认文档存储根目录（每个文档一个子目录）
-├── docker-compose.full.yml     # Postgres + server + nginx 全家桶
+├── docker-compose.yml          # server + SQLite
 ├── Dockerfile                  # 多阶段构建（web + api → 单镜像）
 └── package.json                # 根工作区脚本（concurrently）
 ```
@@ -97,17 +96,11 @@ web-doc/
 
 ### 方式 A — 本地开发（一条命令）
 
-需要 **Node ≥ 18** 与 **Go ≥ 1.21**，以及一个可用的 **PostgreSQL** 实例。
+需要 **Node ≥ 18** 与 **Go ≥ 1.21**。默认使用 SQLite，不需要额外准备数据库服务。
 
 ```bash
 # 安装根目录与 web 子项目依赖
 npm run install:all
-
-# 设置数据库连接（或使用默认值：127.0.0.1:5432 / webdoc / webdoc / webdoc）
-export WEBDOC_PG_HOST=127.0.0.1
-export WEBDOC_PG_USER=webdoc
-export WEBDOC_PG_PASSWORD=webdoc
-export WEBDOC_PG_DB=webdoc
 
 # 同时启动 API（:8787）与 Web（:5173）
 npm run dev
@@ -131,16 +124,10 @@ Go 服务会在同一个端口（默认 `:8787`）上同时提供 SPA、REST API
 ### 方式 C — Docker Compose（推荐自托管使用）
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose up -d
 ```
 
-这将启动：
-
-- `postgres` — PostgreSQL 16
-- `server` — Web-Doc Go 服务（基于 `Dockerfile` 多阶段构建）
-- `nginx` — `:80` 反向代理（配置位于 `deploy/nginx/`）
-
-文档文件持久化到名为 `docs` 的 volume；数据库持久化到 `pgdata`。
+这会基于 `Dockerfile` 在本地构建 Web-Doc 镜像，并在 <http://localhost:8787> 启动 Go 服务。文档文件和 SQLite 数据库会持久化到名为 `data` 的 volume。
 
 ---
 
@@ -156,8 +143,10 @@ docker compose -f docker-compose.full.yml up -d
 | `WEBDOC_ORIGIN` | `*` | CORS 白名单（逗号分隔；`*` 表示全部允许）。 |
 | `WEBDOC_JWT_SECRET` | _(默认值不安全)_ | **生产环境必须修改。** 用于签发 JWT 的 HMAC 密钥。 |
 | `WEBDOC_DISABLE_REGISTER` | _(未设置)_ | 设为 `1` 时关闭公开注册接口。 |
-| `WEBDOC_DSN` | _(未设置)_ | 完整的 Postgres DSN；设置后将覆盖所有 `WEBDOC_PG_*` 变量。 |
-| `WEBDOC_PG_HOST` | `127.0.0.1` | Postgres 主机。 |
+| `WEBDOC_DB_DRIVER` | `sqlite` | 数据库驱动：`sqlite` 或 `postgres`。 |
+| `WEBDOC_DB_PATH` | `../../storage/webdoc.db` | SQLite 数据库文件路径。 |
+| `WEBDOC_DSN` | _(未设置)_ | 完整数据库 DSN；设置后会自动推断驱动，除非同时设置 `WEBDOC_DB_DRIVER`。 |
+| `WEBDOC_PG_HOST` | `127.0.0.1` | Postgres 主机，仅在 `WEBDOC_DB_DRIVER=postgres` 且未设置 `WEBDOC_DSN` 时使用。 |
 | `WEBDOC_PG_PORT` | `5432` | Postgres 端口。 |
 | `WEBDOC_PG_USER` | `webdoc` | Postgres 用户。 |
 | `WEBDOC_PG_PASSWORD` | `webdoc` | Postgres 密码。 |
@@ -210,9 +199,9 @@ docker compose -f docker-compose.full.yml up -d
 | 层 | 技术 |
 |---|---|
 | 前端 | React 19 · Vite · TypeScript · TailwindCSS · shadcn/ui · Zustand · React Router · **Monaco Editor** · **dnd-kit** |
-| 后端 | Go · **Gin** · **GORM** · **PostgreSQL** · `fsnotify` · `gorilla/websocket` · JWT |
-| 存储 | 本地文件系统（每个文档一个目录） + PostgreSQL（元数据、用户、AI 设置、Prompt、MCP Token） |
-| 部署 | 单 Go 二进制 · Docker · Docker Compose · Nginx |
+| 后端 | Go · **Gin** · **GORM** · **SQLite**（可选 Postgres）· `fsnotify` · `gorilla/websocket` · JWT |
+| 存储 | 本地文件系统（每个文档一个目录） + 默认 SQLite（元数据、用户、AI 设置、Prompt、MCP Token） |
+| 部署 | 单 Go 二进制 · Docker · Docker Compose · 可选外部反向代理 |
 
 ---
 
