@@ -19,8 +19,6 @@ services:
     #   - "5432:5432"
 
   server:
-    # Build locally by default so users do not need access to a private registry.
-    # If a public image is published, add an `image:` entry here and run `docker compose pull`.
     build:
       context: .
       dockerfile: Dockerfile
