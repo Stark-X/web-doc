@@ -53,7 +53,7 @@ export function AISettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-violet-400" /> AI 设置
@@ -65,15 +65,15 @@ export function AISettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-          <TabsList className="w-full justify-start">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex flex-col min-h-0">
+          <TabsList className="w-full justify-start shrink-0">
             <TabsTrigger value="connection">连接 / 模型</TabsTrigger>
             <TabsTrigger value="skills">Skill 管理</TabsTrigger>
             <TabsTrigger value="mcp">MCP 接入</TabsTrigger>
           </TabsList>
 
           {/* ---------------- 连接 ---------------- */}
-          <TabsContent value="connection" className="space-y-4 py-3">
+          <TabsContent value="connection" className="space-y-4 py-3 flex-1 min-h-0 overflow-y-auto">
             <div>
               <label className="text-xs text-muted-foreground mb-1.5 block">服务商预设</label>
               <div className="flex flex-wrap gap-1.5">
@@ -144,12 +144,12 @@ export function AISettingsDialog({
           </TabsContent>
 
           {/* ---------------- Skill 管理（即 Prompt 模板） ---------------- */}
-          <TabsContent value="skills" className="py-3">
+          <TabsContent value="skills" className="py-3 flex-1 min-h-0 overflow-y-auto">
             <PromptManager />
           </TabsContent>
 
           {/* ---------------- MCP 接入 ---------------- */}
-          <TabsContent value="mcp" className="py-3">
+          <TabsContent value="mcp" className="py-3 flex-1 min-h-0 overflow-y-auto">
             <MCPPanel />
           </TabsContent>
         </Tabs>
