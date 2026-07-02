@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -316,7 +317,12 @@ func (h *Handler) GetFileContent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"path": sub, "content": string(data)})
 }
 
-// ---------- 静态资源服务 (/d/:id/*path) ----------
+// ---------- 静态资源服务 (/d/:id/*path, /p/:token/*path) ----------
+
+// docSandboxCSP 与前端 iframe 的 sandbox 属性对齐，但不含 allow-same-origin：
+// 文档以 opaque origin 运行，访问 localStorage / cookie 会抛 SecurityError，
+// 上传文档中的恶意 JS 无法窃取已登录访问者的 JWT。
+const docSandboxCSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads"
 
 func (h *Handler) ServeDocAsset(c *gin.Context) {
 	id := c.Param("id")
@@ -331,6 +337,15 @@ func (h *Handler) ServeDocAsset(c *gin.Context) {
 		c.String(http.StatusNotFound, "Not Found")
 		return
 	}
+	// 仅主站自己的编辑器 iframe（同源加载）豁免 sandbox，保住 ?p= 深链同步；
+	// 其余场景（顶层直开、外站嵌入、不发 Sec-Fetch 头的旧浏览器）一律 sandbox，fail-closed。
+	exempt := c.GetHeader("Sec-Fetch-Dest") == "iframe" && c.GetHeader("Sec-Fetch-Site") == "same-origin"
+	h.serveDocFile(c, id, sub, !exempt)
+}
+
+// serveDocFile 输出文档目录下的单个文件（/d/ 与 /p/ 共用）。
+// sandbox=true 时附带 CSP sandbox 头，使文档运行在 opaque origin。
+func (h *Handler) serveDocFile(c *gin.Context, id, sub string, sandbox bool) {
 	full, err := h.Storage.ResolveSafe(id, sub)
 	if err != nil {
 		c.String(http.StatusBadRequest, "invalid path")
@@ -341,9 +356,16 @@ func (h *Handler) ServeDocAsset(c *gin.Context) {
 	if ct := mime.TypeByExtension(ext); ct != "" {
 		c.Header("Content-Type", ct)
 	}
-	// 安全头：不允许被同源以外的 iframe 嵌入主站
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Referrer-Policy", "no-referrer")
+	if sandbox {
+		// 不能叠加 frame-ancestors：sandbox 后文档内部自嵌的 iframe 祖先是 opaque origin，
+		// 会被 'self' 误杀；且 opaque origin 本身已阻断对主站的一切访问。
+		c.Header("Content-Security-Policy", docSandboxCSP)
+	} else {
+		// 未 sandbox 的响应（编辑器 iframe）只允许同源嵌入，防外站嵌套
+		c.Header("Content-Security-Policy", "frame-ancestors 'self'")
+	}
 	// 禁用浏览器/中间层缓存：文档内容会被实时编辑，必须每次拿最新版本
 	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	c.Header("Pragma", "no-cache")
@@ -355,12 +377,44 @@ func (h *Handler) ServeDocAsset(c *gin.Context) {
 			c.String(http.StatusNotFound, "Not Found")
 			return
 		}
-		log.Printf("[ServeDocAsset] read file failed id=%s sub=%s err=%v", id, sub, err)
+		log.Printf("[serveDocFile] read file failed id=%s sub=%s err=%v", id, sub, err)
 		c.String(http.StatusInternalServerError, "read failed")
 		return
 	}
 	c.Status(http.StatusOK)
 	_, _ = c.Writer.Write(data)
+}
+
+// ServeSharedDocAsset 纯静态分享（/p/:token/*path）：
+// 通过 share token 直接输出文档文件，无 React 外壳、无 iframe，删除 Share 记录即可撤销。
+// 始终携带 CSP sandbox，访客打开的文档拿不到主站登录态。
+func (h *Handler) ServeSharedDocAsset(c *gin.Context) {
+	token := c.Param("token")
+	var s model.Share
+	if err := h.DB.Where("token = ?", token).First(&s).Error; err != nil {
+		c.String(http.StatusNotFound, "Not Found")
+		return
+	}
+	if s.ExpiresAt != nil && time.Now().After(*s.ExpiresAt) {
+		c.String(http.StatusNotFound, "Not Found")
+		return
+	}
+	var n model.Node
+	if err := h.DB.First(&n, "id = ? AND type = 'doc'", s.DocID).Error; err != nil {
+		c.String(http.StatusNotFound, "Not Found")
+		return
+	}
+	sub := strings.TrimPrefix(c.Param("path"), "/")
+	// 访问 /p/:token 或 /p/:token/ 时重定向到文档入口文件
+	if sub == "" {
+		entry := n.EntryFile
+		if entry == "" {
+			entry = "index.html"
+		}
+		c.Redirect(http.StatusFound, (&url.URL{Path: "/p/" + token + "/" + entry}).RequestURI())
+		return
+	}
+	h.serveDocFile(c, n.ID, sub, true)
 }
 
 // ---------- 分享 ----------

@@ -123,6 +123,9 @@ func main() {
 	// 静态资源（独立路径，建议生产部署到独立子域名）
 	app.GET("/d/:id/*path", h.ServeDocAsset)
 
+	// 纯静态分享：通过 share token 直接访问文档文件（始终带 CSP sandbox，无主站外壳）
+	app.GET("/p/:token/*path", h.ServeSharedDocAsset)
+
 	// WebSocket：文档变更推送
 	app.GET("/ws/docs/:id", h.WSDocWatch)
 
@@ -174,7 +177,7 @@ func mountFrontend(app *gin.Engine, webRoot string) {
 	indexPath := filepath.Join(webRoot, "index.html")
 
 	// API/资源前缀：这些路径不应被 SPA fallback 拦截
-	backendPrefixes := []string{"/api", "/d/", "/ws", "/healthz", "/mcp"}
+	backendPrefixes := []string{"/api", "/d/", "/p/", "/ws", "/healthz", "/mcp"}
 
 	app.NoRoute(func(c *gin.Context) {
 		if c.Request.Method == http.MethodOptions {
