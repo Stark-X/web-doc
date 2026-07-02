@@ -35,6 +35,7 @@ Web-Doc 是一个自托管的单二进制应用，让你可以组织、编辑、
 ### 分享
 - 为任意文档生成公开 **分享短链**。
 - 在 `/s/{shareToken}` 提供干净、无干扰的纯净预览页。
+- **纯静态分享** `/p/{shareToken}/`：直接输出文档文件本身，无主站外壳、无 iframe；响应携带 CSP `sandbox`，文档脚本运行在 opaque origin，无法读取访问者在主站的登录态。
 
 ### 认证与多用户
 - 基于 **JWT** 的用户名/密码注册与登录。
@@ -189,6 +190,7 @@ docker compose up -d
 
 ### 静态资源 / 实时
 - `GET   /d/:id/*path` — 文档静态资源（沙箱化独立路径）。
+- `GET   /p/:token/*path` — 纯静态分享（通过分享 token 直接访问文档文件，始终携带 CSP `sandbox`）。
 - `GET   /ws/docs/:id` — WebSocket：推送变更事件用于热更新。
 - `GET   /healthz` — 健康检查。
 
@@ -208,6 +210,7 @@ docker compose up -d
 ## 🔒 安全设计
 
 - iframe `sandbox` 属性强隔离用户编写的 HTML / JS。
+- `/d/`、`/p/` 响应默认携带 CSP `sandbox` 头（无 `allow-same-origin`）：文档以 opaque origin 运行，无法读取主站 localStorage / Cookie（防止上传文档中的脚本窃取访问者 JWT）。仅主站编辑器的同源 iframe 加载（按 `Sec-Fetch-Dest` / `Sec-Fetch-Site` 判定）豁免 sandbox，改为 `frame-ancestors 'self'` 防外站嵌套。
 - 文档静态资源固定挂载在 `/d/` 前缀，禁用目录列表。
 - 路径穿越防护（拒绝 `..` 与以 `/` 开头的绝对路径）。
 - ZIP 上传扩展名白名单（html / js / css / png / jpg / svg / woff2 / ...）。

@@ -35,6 +35,7 @@ Web-Doc is a self-hosted single-binary application that lets you organize, edit,
 ### Sharing
 - Generate a public **share token** for any document.
 - Clean, distraction-free public preview at `/s/{shareToken}` (no app chrome).
+- **Static sharing** at `/p/{shareToken}/`: serves the raw document files directly — no app shell, no iframe. Responses carry a CSP `sandbox` header, so document scripts run in an opaque origin and cannot read the visitor's login state.
 
 ### Authentication & Multi-User
 - Username / password registration + login with **JWT**.
@@ -189,6 +190,7 @@ Per-document upload size is capped at **50 MB** by default (see `MaxUploadMB` in
 
 ### Static / Realtime
 - `GET   /d/:id/*path` — document static assets (sandboxed origin path).
+- `GET   /p/:token/*path` — static sharing (raw document files via share token, always served with CSP `sandbox`).
 - `GET   /ws/docs/:id` — WebSocket: pushes change events for live reload.
 - `GET   /healthz` — health check.
 
@@ -208,6 +210,7 @@ Per-document upload size is capped at **50 MB** by default (see `MaxUploadMB` in
 ## 🔒 Security Notes
 
 - iframe `sandbox` attribute strongly isolates user-authored HTML/JS.
+- `/d/` and `/p/` responses carry a CSP `sandbox` header (without `allow-same-origin`) by default: documents run in an opaque origin and cannot touch the app's localStorage / cookies (prevents uploaded scripts from stealing visitors' JWTs). Only same-origin editor iframe loads (detected via `Sec-Fetch-Dest` / `Sec-Fetch-Site`) are exempted, and get `frame-ancestors 'self'` instead to block cross-site embedding.
 - Document static assets are served under a dedicated `/d/` prefix with directory listing disabled.
 - Path-traversal protection (`..` and absolute paths are rejected on all read/write paths).
 - Zip-upload extension whitelist (html / js / css / png / jpg / svg / woff2 / ...).
