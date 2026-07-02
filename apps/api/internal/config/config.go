@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,12 +18,17 @@ type Config struct {
 	AllowOrigin     string
 	JWTSecret       string
 	DisableRegister bool
+	ShareBaseURL    string
 }
 
-func Load() *Config {
+func Load() (*Config, error) {
 	storage := getEnv("WEBDOC_STORAGE", filepath.Join("..", "..", "storage", "docs"))
 	abs, _ := filepath.Abs(storage)
 	driver, dsn := buildDatabaseConfig(abs)
+	shareBaseURL, err := normalizeShareBaseURL(getEnv("WEBDOC_SHARE_BASE_URL", ""))
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		Addr:            getEnv("WEBDOC_ADDR", ":8787"),
@@ -34,7 +40,8 @@ func Load() *Config {
 		AllowOrigin:     getEnv("WEBDOC_ORIGIN", "*"),
 		JWTSecret:       getEnv("WEBDOC_JWT_SECRET", "webdoc-default-secret-please-change"),
 		DisableRegister: getEnv("WEBDOC_DISABLE_REGISTER", "") == "1",
-	}
+		ShareBaseURL:    shareBaseURL,
+	}, nil
 }
 
 // buildDatabaseConfig 默认使用 SQLite；显式指定 Postgres 时兼容旧的 PG* 配置。
@@ -83,6 +90,29 @@ func normalizeDriver(driver string) string {
 	default:
 		return "sqlite"
 	}
+}
+
+func normalizeShareBaseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid WEBDOC_SHARE_BASE_URL: %w", err)
+	}
+	if !u.IsAbs() || u.Host == "" {
+		return "", fmt.Errorf("invalid WEBDOC_SHARE_BASE_URL: must be an absolute http(s) URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("invalid WEBDOC_SHARE_BASE_URL: scheme must be http or https")
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", fmt.Errorf("invalid WEBDOC_SHARE_BASE_URL: query and fragment are not allowed")
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawPath = ""
+	return u.String(), nil
 }
 
 func getEnv(k, def string) string {

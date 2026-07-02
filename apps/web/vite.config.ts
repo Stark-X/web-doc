@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: 'http://localhost:8787', changeOrigin: true },
         '/d':   { target: 'http://localhost:8787', changeOrigin: true },
+        '/p':   { target: 'http://localhost:8787', changeOrigin: true },
         '/ws':  { target: 'ws://localhost:8787', ws: true, changeOrigin: true },
       },
     },

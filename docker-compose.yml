@@ -17,6 +17,8 @@ services:
       WEBDOC_STORAGE: "/data/docs"
       WEBDOC_WEB_ROOT: "/app/web"
       WEBDOC_ORIGIN: "*"
+      # WEBDOC_SHARE_BASE_URL: "https://share.example.com/p"
+      # WEBDOC_DISABLE_REGISTER: 1 #  to lock down the instance to existing users
     volumes:
       - data:/data
     ports:

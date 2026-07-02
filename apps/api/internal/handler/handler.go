@@ -30,6 +30,7 @@ type Handler struct {
 	Hub             *watcher.Hub
 	JWTSecret       string
 	DisableRegister bool
+	ShareBaseURL    string
 
 	wsUpgrader websocket.Upgrader
 }
@@ -429,7 +430,7 @@ func (h *Handler) CreateShare(c *gin.Context) {
 	// 复用已有未过期分享
 	var existing model.Share
 	if err := h.DB.Where("doc_id = ?", id).First(&existing).Error; err == nil {
-		c.JSON(http.StatusOK, existing)
+		c.JSON(http.StatusOK, h.shareResponse(existing))
 		return
 	}
 	tk := randomToken(12)
@@ -443,7 +444,27 @@ func (h *Handler) CreateShare(c *gin.Context) {
 		serverError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, s)
+	c.JSON(http.StatusOK, h.shareResponse(s))
+}
+
+type shareResponse struct {
+	ID                 string     `json:"id"`
+	DocID              string     `json:"docId"`
+	Token              string     `json:"token"`
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	StaticShareBaseURL string     `json:"staticShareBaseUrl,omitempty"`
+}
+
+func (h *Handler) shareResponse(s model.Share) shareResponse {
+	return shareResponse{
+		ID:                 s.ID,
+		DocID:              s.DocID,
+		Token:              s.Token,
+		ExpiresAt:          s.ExpiresAt,
+		CreatedAt:          s.CreatedAt,
+		StaticShareBaseURL: h.ShareBaseURL,
+	}
 }
 
 // GetShareInfo 通过 token 取得文档信息（前端 /s/:token 用）
@@ -463,7 +484,7 @@ func (h *Handler) GetShareInfo(c *gin.Context) {
 	}
 	log.Printf("[web-doc api] GetShareInfo ok path=%s token=%q shareID=%q docID=%q title=%q visibility=%q userID=%q username=%q", c.Request.URL.RequestURI(), token, s.ID, n.ID, n.Title, n.Visibility, getLocal(c, "userID"), getLocal(c, "username"))
 	c.JSON(http.StatusOK, gin.H{
-		"share": s,
+		"share": h.shareResponse(s),
 		"doc":   n,
 	})
 }

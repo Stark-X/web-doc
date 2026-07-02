@@ -112,6 +112,7 @@ npm run dev
 - 应用：<http://localhost:5173>
 - 文档静态资源路径：`http://localhost:8787/d/{docId}/index.html`
 - 公开分享：<http://localhost:5173/s/{shareToken}>
+- 纯静态分享：`http://localhost:5173/p/{shareToken}/index.html`
 
 ### 方式 B — 生产构建（单二进制）
 
@@ -144,6 +145,7 @@ docker compose up -d
 | `WEBDOC_ORIGIN` | `*` | CORS 白名单（逗号分隔；`*` 表示全部允许）。 |
 | `WEBDOC_JWT_SECRET` | _(默认值不安全)_ | **生产环境必须修改。** 用于签发 JWT 的 HMAC 密钥。 |
 | `WEBDOC_DISABLE_REGISTER` | _(未设置)_ | 设为 `1` 时关闭公开注册接口。 |
+| `WEBDOC_SHARE_BASE_URL` | _(未设置)_ | 可选的纯静态分享公开 URL 前缀。例如反代暴露 `/p/` 时设为 `https://share.example.com/p`；若分享域根路径重写到后端 `/p/`，设为 `https://share.example.com`。 |
 | `WEBDOC_DB_DRIVER` | `sqlite` | 数据库驱动：`sqlite` 或 `postgres`。 |
 | `WEBDOC_DB_PATH` | `../../storage/webdoc.db` | SQLite 数据库文件路径。 |
 | `WEBDOC_DSN` | _(未设置)_ | 完整数据库 DSN；设置后会自动推断驱动，除非同时设置 `WEBDOC_DB_DRIVER`。 |
@@ -211,6 +213,7 @@ docker compose up -d
 
 - iframe `sandbox` 属性强隔离用户编写的 HTML / JS。
 - `/d/`、`/p/` 响应默认携带 CSP `sandbox` 头（无 `allow-same-origin`）：文档以 opaque origin 运行，无法读取主站 localStorage / Cookie（防止上传文档中的脚本窃取访问者 JWT）。仅主站编辑器的同源 iframe 加载（按 `Sec-Fetch-Dest` / `Sec-Fetch-Site` 判定）豁免 sandbox，改为 `frame-ancestors 'self'` 防外站嵌套。
+- `WEBDOC_SHARE_BASE_URL` 可将纯静态分享链接指向独立 origin。生产环境建议配合反向代理，让该 Host 只暴露静态分享路径。
 - 文档静态资源固定挂载在 `/d/` 前缀，禁用目录列表。
 - 路径穿越防护（拒绝 `..` 与以 `/` 开头的绝对路径）。
 - ZIP 上传扩展名白名单（html / js / css / png / jpg / svg / woff2 / ...）。

@@ -18,12 +18,18 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("[web-doc] storage dir: %s", cfg.StorageDir)
 	log.Printf("[web-doc] db driver:   %s", cfg.DBDriver)
 	log.Printf("[web-doc] listening:   %s", cfg.Addr)
 	if cfg.WebRoot != "" {
 		log.Printf("[web-doc] web root:    %s", cfg.WebRoot)
+	}
+	if cfg.ShareBaseURL != "" {
+		log.Printf("[web-doc] share base:  %s", cfg.ShareBaseURL)
 	}
 
 	st, err := storage.New(cfg.StorageDir)
@@ -42,6 +48,7 @@ func main() {
 	h := handler.New(d, st, hub)
 	h.JWTSecret = cfg.JWTSecret
 	h.DisableRegister = cfg.DisableRegister
+	h.ShareBaseURL = cfg.ShareBaseURL
 
 	gin.SetMode(gin.ReleaseMode)
 	app := gin.New()

@@ -39,9 +39,15 @@ func TestRouteWiring(t *testing.T) {
 			"path": c.Param("path"),
 		})
 	})
+	app.GET("/p/:token/*path", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"token": c.Param("token"),
+			"path":  c.Param("path"),
+		})
+	})
 
 	// 模拟 NoRoute (SPA fallback)
-	backendPrefixes := []string{"/api", "/d/", "/ws", "/healthz", "/mcp"}
+	backendPrefixes := []string{"/api", "/d/", "/p/", "/ws", "/healthz", "/mcp"}
 	app.NoRoute(func(c *gin.Context) {
 		if c.Request.Method == http.MethodOptions {
 			c.Status(http.StatusNoContent)
@@ -68,7 +74,9 @@ func TestRouteWiring(t *testing.T) {
 		{"healthz", "GET", "/healthz", 200, "ok"},
 		{"doc asset wildcard root", "GET", "/d/abc/index.html", 200, ""},
 		{"doc asset wildcard nested", "GET", "/d/abc/sub/x.css", 200, ""},
+		{"shared asset wildcard root", "GET", "/p/tok/index.html", 200, ""},
 		{"api unknown -> 404", "GET", "/api/whatever", 404, ""},
+		{"shared token without slash redirects", "GET", "/p/whatever", 301, ""},
 		{"mcp prefix unknown -> 404", "GET", "/mcp/foo", 404, ""},
 		{"spa fallback", "GET", "/spa/page", 200, "spa-fallback"},
 		{"api nodes get", "GET", "/api/nodes", 200, ""},

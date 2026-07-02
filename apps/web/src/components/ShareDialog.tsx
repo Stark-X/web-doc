@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy, Link } from 'lucide-react'
-import { Shares, type DocNode } from '@/lib/api'
+import { Shares, type DocNode, type ShareInfo } from '@/lib/api'
 import { copyToClipboard } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -15,14 +15,14 @@ export function ShareDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
-  const [token, setToken] = useState<string | null>(null)
+  const [share, setShare] = useState<ShareInfo | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (open && doc) {
-      Shares.create(doc.id).then((s) => setToken(s.token))
+      Shares.create(doc.id).then((s) => setShare(s))
     } else {
-      setToken(null); setCopiedKey(null)
+      setShare(null); setCopiedKey(null)
     }
   }, [open, doc])
 
@@ -30,9 +30,11 @@ export function ShareDialog({
   // 访问者如需隐藏主站顶部和左侧菜单，可使用 ?fullscreen 链接（仍然是 React 外壳 + iframe，仅视觉隐藏菜单）。
   // 静态页面链接：后端 /p/:token 直接输出文档文件（无外壳、无 iframe），响应带
   // CSP sandbox，文档脚本运行在 opaque origin，读不到访问者在主站的登录态。
-  // 注意：必须拼上 Vite 构建时的 BASE_URL（如 /doc/），否则在反向代理（nginx 暴露 /doc/）下链接会 404。
+  // 未配置分享专用域名时，必须拼上 Vite 构建时的 BASE_URL（如 /doc/），否则反向代理子路径部署会 404。
   const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
   const entryPath = (doc?.entryFile || 'index.html').split('/').map(encodeURIComponent).join('/')
+  const token = share?.token
+  const staticShareBase = share?.staticShareBaseUrl?.replace(/\/+$/, '') || `${location.origin}${baseUrl}/p`
   const links = token ? [
     {
       key: 'default',
@@ -46,7 +48,7 @@ export function ShareDialog({
     },
     {
       key: 'static',
-      url: `${location.origin}${baseUrl}/p/${token}/${entryPath}`,
+      url: `${staticShareBase}/${token}/${entryPath}`,
       hint: '静态页面链接：直接打开文档本身，无主站外壳；浏览器沙箱隔离，文档脚本无法读取访问者的登录状态。',
     },
   ] : []

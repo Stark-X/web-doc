@@ -112,6 +112,7 @@ Then open:
 - App: <http://localhost:5173>
 - Document static path: `http://localhost:8787/d/{docId}/index.html`
 - Public share: <http://localhost:5173/s/{shareToken}>
+- Static share: `http://localhost:5173/p/{shareToken}/index.html`
 
 ### Option B — Production build (single binary)
 
@@ -144,6 +145,7 @@ All configuration is done through environment variables.
 | `WEBDOC_ORIGIN` | `*` | CORS allow-list (comma-separated; `*` = allow all). |
 | `WEBDOC_JWT_SECRET` | _(insecure default)_ | **Change in production.** HMAC secret for JWT. |
 | `WEBDOC_DISABLE_REGISTER` | _(unset)_ | Set to `1` to disable the public registration endpoint. |
+| `WEBDOC_SHARE_BASE_URL` | _(unset)_ | Optional public URL prefix for static share links. Example: `https://share.example.com/p` if the proxy exposes `/p/`, or `https://share.example.com` if that host rewrites its root to backend `/p/`. |
 | `WEBDOC_DB_DRIVER` | `sqlite` | Database driver: `sqlite` or `postgres`. |
 | `WEBDOC_DB_PATH` | `../../storage/webdoc.db` | SQLite database file path. |
 | `WEBDOC_DSN` | _(unset)_ | Full database DSN; if set, the driver is inferred unless `WEBDOC_DB_DRIVER` is also set. |
@@ -211,6 +213,7 @@ Per-document upload size is capped at **50 MB** by default (see `MaxUploadMB` in
 
 - iframe `sandbox` attribute strongly isolates user-authored HTML/JS.
 - `/d/` and `/p/` responses carry a CSP `sandbox` header (without `allow-same-origin`) by default: documents run in an opaque origin and cannot touch the app's localStorage / cookies (prevents uploaded scripts from stealing visitors' JWTs). Only same-origin editor iframe loads (detected via `Sec-Fetch-Dest` / `Sec-Fetch-Site`) are exempted, and get `frame-ancestors 'self'` instead to block cross-site embedding.
+- `WEBDOC_SHARE_BASE_URL` can point static share links at a dedicated origin. In production, pair it with a reverse proxy that exposes only static sharing paths on that host.
 - Document static assets are served under a dedicated `/d/` prefix with directory listing disabled.
 - Path-traversal protection (`..` and absolute paths are rejected on all read/write paths).
 - Zip-upload extension whitelist (html / js / css / png / jpg / svg / woff2 / ...).

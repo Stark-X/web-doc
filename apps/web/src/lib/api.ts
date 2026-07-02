@@ -72,6 +72,7 @@ export interface ShareInfo {
   id: string
   docId: string
   token: string
+  staticShareBaseUrl?: string
   createdAt: string
 }
 
