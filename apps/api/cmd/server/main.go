@@ -75,6 +75,25 @@ func main() {
 	}
 	app.Use(cors.New(corsCfg))
 
+	registerRoutes(app, h)
+
+	// 前端静态资源（SPA），放在所有 API 路由之后
+	if cfg.WebRoot != "" {
+		mountFrontend(app, cfg.WebRoot)
+	} else {
+		mountNotFound(app)
+	}
+
+	if err := app.Run(cfg.Addr); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// registerRoutes 注册全部业务路由。
+// 安全边界：凡是改动数据或读取全量列表的端点一律挂 AuthRequired；
+// 匿名可访问的仅限：注册/登录、分享 token 解析、单文档只读信息与静态文件
+//（未登录访客打开分享链接时需要）、WS 变更推送、MCP（handler 内部用 MCP Token 鉴权）。
+func registerRoutes(app *gin.Engine, h *handler.Handler) {
 	// 健康检查
 	app.GET("/healthz", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
@@ -87,24 +106,28 @@ func main() {
 	app.POST("/api/auth/login", h.AuthLogin)
 	app.GET("/api/auth/me", h.AuthRequired, h.AuthMe)
 
-	// API 路由
+	// 公开只读 API：未登录访客通过分享链接看文档时使用
+	//（文件列表、代码查看；内容与 /d/:id/*path 静态直链等价，不额外扩大暴露面）
 	api := app.Group("/api")
-	api.GET("/nodes", h.ListNodes)
-	api.POST("/nodes", h.CreateNode)
 	api.GET("/nodes/:id", h.GetNode)
-	api.PATCH("/nodes/:id", h.UpdateNode)
-	api.DELETE("/nodes/:id", h.DeleteNode)
-
-	api.POST("/docs/:id/html", h.UploadHTML)
-	api.POST("/docs/:id/zip", h.UploadZip)
 	api.GET("/docs/:id/file", h.GetFileContent)
-	api.POST("/docs/:id/file", h.SaveFile)
-
-	api.POST("/docs/:id/share", h.CreateShare)
 	api.GET("/shares/:token", h.GetShareInfo)
 
+	// 受保护 API：全量列表与一切写操作必须登录
+	authed := api.Group("", h.AuthRequired)
+	authed.GET("/nodes", h.ListNodes)
+	authed.POST("/nodes", h.CreateNode)
+	authed.PATCH("/nodes/:id", h.UpdateNode)
+	authed.DELETE("/nodes/:id", h.DeleteNode)
+
+	authed.POST("/docs/:id/html", h.UploadHTML)
+	authed.POST("/docs/:id/zip", h.UploadZip)
+	authed.POST("/docs/:id/file", h.SaveFile)
+
+	authed.POST("/docs/:id/share", h.CreateShare)
+
 	// 节点拖拽排序 / 移动
-	api.PATCH("/nodes/reorder/batch", h.ReorderNodes)
+	authed.PATCH("/nodes/reorder/batch", h.ReorderNodes)
 
 	// AI 设置 + 生成（必须登录）
 	aiGroup := api.Group("/ai", h.AuthRequired)
@@ -135,17 +158,6 @@ func main() {
 
 	// WebSocket：文档变更推送
 	app.GET("/ws/docs/:id", h.WSDocWatch)
-
-	// 前端静态资源（SPA），放在所有 API 路由之后
-	if cfg.WebRoot != "" {
-		mountFrontend(app, cfg.WebRoot)
-	} else {
-		mountNotFound(app)
-	}
-
-	if err := app.Run(cfg.Addr); err != nil {
-		log.Fatal(err)
-	}
 }
 
 // splitAndTrim 将逗号分隔的字符串拆分并去空白。

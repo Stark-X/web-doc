@@ -31,7 +31,9 @@ export default function HomePage() {
     && searchParams.get('fullscreen') !== '0'
     && searchParams.get('fullscreen') !== 'false'
 
-  useEffect(() => { loadAll() }, [loadAll])
+  // 节点全量列表需要登录（后端 GET /api/nodes 挂了 AuthRequired）；
+  // 未登录访客（分享链接场景）不拉列表，靠 SharePage 的 upsertFromServer 注入单个文档。
+  useEffect(() => { if (user) loadAll() }, [user, loadAll])
   useEffect(() => { bootstrap() }, [bootstrap])
 
   // URL → store

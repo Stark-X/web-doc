@@ -169,16 +169,18 @@ docker compose up -d
 - `GET  /api/auth/me` — 获取当前用户（需 `Authorization: Bearer <jwt>`）。
 
 ### 节点（文件夹与文档）
-- `GET    /api/nodes` · `POST /api/nodes` · `GET /api/nodes/:id` · `PATCH /api/nodes/:id` · `DELETE /api/nodes/:id`
-- `PATCH  /api/nodes/reorder/batch` — 拖拽批量移动。
+- `GET    /api/nodes` · `POST /api/nodes` · `PATCH /api/nodes/:id` · `DELETE /api/nodes/:id` — 🔐 需登录（JWT）。
+- `GET    /api/nodes/:id` — 公开只读（分享访客加载文件列表用）。
+- `PATCH  /api/nodes/reorder/batch` — 拖拽批量移动。🔐 需登录。
 
 ### 文档
-- `POST /api/docs/:id/html` — 上传单个 `.html`。
-- `POST /api/docs/:id/zip` — 上传多文件 `.zip`。
-- `GET  /api/docs/:id/file?path=...` · `POST /api/docs/:id/file` — 读取/保存单个文件。
+- `POST /api/docs/:id/html` — 上传单个 `.html`。🔐 需登录。
+- `POST /api/docs/:id/zip` — 上传多文件 `.zip`。🔐 需登录。
+- `GET  /api/docs/:id/file?path=...` — 读取单个文件（公开只读，内容与 `/d/` 静态直链等价）。
+- `POST /api/docs/:id/file` — 保存单个文件。🔐 需登录。
 
 ### 分享
-- `POST /api/docs/:id/share` — 签发公开分享 token。
+- `POST /api/docs/:id/share` — 签发公开分享 token。🔐 需登录。
 - `GET  /api/shares/:token` — 解析分享 token（供公开页使用）。
 
 ### AI

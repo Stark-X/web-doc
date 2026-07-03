@@ -169,16 +169,18 @@ Per-document upload size is capped at **50 MB** by default (see `MaxUploadMB` in
 - `GET  /api/auth/me` — current user (requires `Authorization: Bearer <jwt>`).
 
 ### Nodes (folders & docs)
-- `GET    /api/nodes` · `POST /api/nodes` · `GET /api/nodes/:id` · `PATCH /api/nodes/:id` · `DELETE /api/nodes/:id`
-- `PATCH  /api/nodes/reorder/batch` — drag/drop batch move.
+- `GET    /api/nodes` · `POST /api/nodes` · `PATCH /api/nodes/:id` · `DELETE /api/nodes/:id` — 🔐 login required (JWT).
+- `GET    /api/nodes/:id` — public read-only (used by share visitors to load the file list).
+- `PATCH  /api/nodes/reorder/batch` — drag/drop batch move. 🔐 login required.
 
 ### Documents
-- `POST /api/docs/:id/html` — upload a single `.html`.
-- `POST /api/docs/:id/zip` — upload a multi-file `.zip`.
-- `GET  /api/docs/:id/file?path=...` · `POST /api/docs/:id/file` — read/save a single file.
+- `POST /api/docs/:id/html` — upload a single `.html`. 🔐 login required.
+- `POST /api/docs/:id/zip` — upload a multi-file `.zip`. 🔐 login required.
+- `GET  /api/docs/:id/file?path=...` — read a single file (public read-only, same content as the `/d/` static path).
+- `POST /api/docs/:id/file` — save a single file. 🔐 login required.
 
 ### Sharing
-- `POST /api/docs/:id/share` — mint a public share token.
+- `POST /api/docs/:id/share` — mint a public share token. 🔐 login required.
 - `GET  /api/shares/:token` — resolve a share token (used by the public page).
 
 ### AI
