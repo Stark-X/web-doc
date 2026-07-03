@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { FilePlus2, PanelLeftOpen, Sparkles, Wand2, X } from 'lucide-react'
+import { FilePlus2, LogIn, PanelLeftOpen, Sparkles, UserPlus, Wand2, X } from 'lucide-react'
 import { useDocsStore } from '@/store/docs'
 import { useAIChatStore } from '@/store/aiChat'
 import { useAuthStore } from '@/store/auth'
-import type { DocNode } from '@/lib/api'
+import { Shares, type DocNode } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DocTree } from '@/components/DocTree'
@@ -16,9 +16,9 @@ import { AuthDialog } from '@/components/AuthDialog'
 import { UserMenu } from '@/components/UserMenu'
 
 export default function HomePage() {
-  const { nodes, loadAll, selectedId, sidebarOpen, toggleSidebar, selectDoc, createNode } = useDocsStore()
+  const { nodes, loadAll, selectedId, sidebarOpen, toggleSidebar, selectDoc, createNode, upsertFromServer } = useDocsStore()
   const { openPanel } = useAIChatStore()
-  const { user, bootstrap, openLogin } = useAuthStore()
+  const { user, bootstrapped, bootstrap, openLogin } = useAuthStore()
   const [createOpen, setCreateOpen] = useState(false)
   const [createParent, setCreateParent] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<DocNode | null>(null)
@@ -30,11 +30,50 @@ export default function HomePage() {
   const fullscreen = searchParams.get('fullscreen') !== null
     && searchParams.get('fullscreen') !== '0'
     && searchParams.get('fullscreen') !== 'false'
+  const shareToken = searchParams.get('share')
 
   // 节点全量列表需要登录（后端 GET /api/nodes 挂了 AuthRequired）；
   // 未登录访客（分享链接场景）不拉列表，靠 SharePage 的 upsertFromServer 注入单个文档。
   useEffect(() => { if (user) loadAll() }, [user, loadAll])
   useEffect(() => { bootstrap() }, [bootstrap])
+
+  // URL 带 ?share=<token>（SharePage 跳转时附带）：刷新后 store 已清空，
+  // 凭 token 重新解析分享并恢复文档，让访客刷新后仍可匿名浏览。
+  const [shareRestorePending, setShareRestorePending] = useState(!!shareToken)
+  const restoredShareToken = useRef<string | null>(null)
+  useEffect(() => {
+    if (!shareToken || restoredShareToken.current === shareToken) return
+    restoredShareToken.current = shareToken
+    // 刚从 SharePage 跳转过来时文档已在 store 里，无需重复请求
+    if (routeDocId && useDocsStore.getState().sharedDocIds.includes(routeDocId)) {
+      setShareRestorePending(false)
+      return
+    }
+    let cancelled = false
+    Shares.info(shareToken)
+      .then((r) => { if (!cancelled) upsertFromServer(r.doc, { shared: true }) })
+      .catch((err) => {
+        console.warn('[web-doc share] restore from ?share= failed', {
+          shareToken,
+          status: err?.response?.status,
+          message: err?.message,
+        })
+      })
+      .finally(() => { if (!cancelled) setShareRestorePending(false) })
+    return () => { cancelled = true }
+  }, [shareToken, routeDocId, upsertFromServer])
+
+  // 登录态校验完成后仍未登录：自动弹出登录/注册框（每次进入页面只主动弹一次）。
+  // 分享访客除外——他们靠分享 token 恢复的文档匿名浏览，不应被打扰。
+  const autoPromptedLogin = useRef(false)
+  useEffect(() => {
+    if (!bootstrapped || shareRestorePending || autoPromptedLogin.current) return
+    autoPromptedLogin.current = true
+    if (user) return
+    const { sharedDocIds } = useDocsStore.getState()
+    if (routeDocId && sharedDocIds.includes(routeDocId)) return
+    openLogin('login')
+  }, [bootstrapped, shareRestorePending, user, routeDocId, openLogin])
 
   // URL → store
   useEffect(() => {
@@ -108,6 +147,14 @@ export default function HomePage() {
       })
       return
     }
+    // ?share= 恢复尚未完成时不校验，避免把正在恢复的分享文档误判为「不存在」
+    if (shareRestorePending) {
+      console.debug('[web-doc route] skip missing-doc validation while share context restoring', {
+        routeDocId,
+        shareToken,
+      })
+      return
+    }
     const exists = nodes.some((n) => n.id === routeDocId && n.type === 'doc')
     console.debug('[web-doc route] validate route doc against node list', {
       routeDocId,
@@ -128,9 +175,13 @@ export default function HomePage() {
       navigate('/', { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, routeDocId, user])
+  }, [nodes, routeDocId, user, shareRestorePending])
 
   const handleCreate = (parentId: string | null) => {
+    if (!user) {
+      openLogin('login')
+      return
+    }
     setCreateParent(parentId)
     setCreateOpen(true)
   }
@@ -163,10 +214,11 @@ export default function HomePage() {
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-            加载中…
+            {bootstrapped && !user && !shareRestorePending ? '该文档需要登录后查看' : '加载中…'}
           </div>
         )}
         <ShareDialog doc={shareDoc} open={!!shareDoc} onOpenChange={(v) => !v && setShareDoc(null)} />
+        <AuthDialog />
       </div>
     )
   }
@@ -285,6 +337,8 @@ function EmptyState({
   onCreate: () => void
   onAI: () => void
 }) {
+  const { user, bootstrapped, openLogin, registerEnabled } = useAuthStore()
+  const anonymous = bootstrapped && !user
   return (
     <div className="relative h-full w-full flex items-center justify-center gradient-bg">
       {/* 顶部仅在侧栏关闭时显示打开按钮 */}
@@ -312,13 +366,33 @@ function EmptyState({
           沙箱预览、文件夹热更新、一键分享。
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Button variant="gradient" size="lg" onClick={onAI}>
-            <Sparkles /> AI 生成文档
-          </Button>
-          <Button variant="outline" size="lg" onClick={onCreate}>
-            <FilePlus2 /> 手动创建
-          </Button>
+          {anonymous ? (
+            <>
+              <Button variant="gradient" size="lg" onClick={() => openLogin('login')}>
+                <LogIn /> 登录
+              </Button>
+              {registerEnabled && (
+                <Button variant="outline" size="lg" onClick={() => openLogin('register')}>
+                  <UserPlus /> 注册账号
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button variant="gradient" size="lg" onClick={onAI}>
+                <Sparkles /> AI 生成文档
+              </Button>
+              <Button variant="outline" size="lg" onClick={onCreate}>
+                <FilePlus2 /> 手动创建
+              </Button>
+            </>
+          )}
         </div>
+        {anonymous && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            登录后即可创建、编辑与分享文档
+          </p>
+        )}
       </div>
     </div>
   )

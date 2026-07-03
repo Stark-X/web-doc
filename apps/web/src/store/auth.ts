@@ -5,6 +5,8 @@ interface AuthState {
   user: AuthUser | null
   token: string | null
   loading: boolean
+  /** bootstrap() 是否已完成（无论成败）；用于区分「未登录」和「登录态还没校验完」 */
+  bootstrapped: boolean
   registerEnabled: boolean
   loginOpen: boolean
   loginMode: 'login' | 'register'
@@ -21,6 +23,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: getToken(),
   loading: false,
+  bootstrapped: false,
   registerEnabled: true,
   loginOpen: false,
   loginMode: 'login',
@@ -30,13 +33,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const info = await Auth.publicInfo()
       set({ registerEnabled: info.registerEnabled })
     } catch {/* ignore */}
-    if (!getToken()) return
     try {
-      const u = await Auth.me()
-      set({ user: u })
+      if (getToken()) {
+        const u = await Auth.me()
+        set({ user: u })
+      }
     } catch {
       setToken(null)
       set({ user: null, token: null })
+    } finally {
+      set({ bootstrapped: true })
     }
   },
 
@@ -71,11 +77,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
-// 全局 401 监听
+// 全局 401 监听：无论是登录过期还是未登录直接触发写操作，都弹出登录框
 if (typeof window !== 'undefined') {
   window.addEventListener('webdoc:unauthorized', () => {
-    const { user, openLogin } = useAuthStore.getState()
     useAuthStore.setState({ user: null, token: null })
-    if (user) openLogin('login')
+    useAuthStore.getState().openLogin('login')
   })
 }

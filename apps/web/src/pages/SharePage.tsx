@@ -50,23 +50,26 @@ export default function SharePage() {
   // - 带 ?fullscreen：隐藏顶部 + 左侧菜单（iframe 仍然嵌套，路由不被破坏）
   // 跳转前先把文档 upsert 到 store，避免 HomePage 因为本地 nodes 里没有它而
   // 误判为「不存在」并重定向回首页（典型场景：未登录访客打开分享链接）。
+  // 同时把 share token 带进目标 URL（?share=），这样访客刷新 /v/ 页面后
+  // HomePage 仍能凭它重新解析分享、恢复文档，而不是要求登录。
   useEffect(() => {
-    if (!doc) return
+    if (!doc || !token) return
     console.debug('[web-doc share] upsert shared doc before redirect', {
       docId: doc.id,
       title: doc.title,
       fullscreen,
     })
     upsertFromServer(doc, { shared: true, select: true })
-    const suffix = fullscreen ? '?fullscreen=1' : ''
-    const target = `/v/${doc.id}${suffix}`
+    const query = new URLSearchParams({ share: token })
+    if (fullscreen) query.set('fullscreen', '1')
+    const target = `/v/${doc.id}?${query.toString()}`
     console.debug('[web-doc share] navigate to shared doc', {
       from: location.pathname + location.search,
       target,
       replace: true,
     })
     navigate(target, { replace: true })
-  }, [doc, fullscreen, navigate, upsertFromServer])
+  }, [doc, token, fullscreen, navigate, upsertFromServer])
 
   if (error) {
     return (
