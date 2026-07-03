@@ -5,7 +5,7 @@ import {
   PanelsTopLeft, RefreshCw, Share2, Sparkles, SplitSquareHorizontal,
 } from 'lucide-react'
 import { Nodes, type DocNode } from '@/lib/api'
-import { DOC_ASSET_BASE, WS_BASE } from '@/lib/api'
+import { DOC_ASSET_BASE, WS_BASE, prefixed } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -177,7 +177,12 @@ export function DocViewer({
   onToggleSidebar?: () => void
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [fullscreen, setFullscreen] = useState(false)
+  // 全屏模式：native = 浏览器 Fullscreen API（隐藏地址栏/标签栏）+ CSS 覆盖盖住侧栏；
+  // css = API 不可用或被拒绝时仅 CSS 覆盖（等同旧版行为）。
+  // 全屏对象是 documentElement 而非本容器：Radix 弹层（tooltip/下拉/对话框）portal 在
+  // document.body 上，若只全屏容器，这些弹层在全屏期间会全部不可见。
+  const [fs, setFs] = useState<'off' | 'native' | 'css'>('off')
+  const fullscreen = fs !== 'off'
   const [reloadKey, setReloadKey] = useState(0)
   const [connected, setConnected] = useState(false)
 
@@ -337,6 +342,47 @@ export function DocViewer({
       }
     })
   }
+
+  // 新标签打开主站全屏视图（/v/:id?fullscreen=1），而不是 /d/ 匿名直链：
+  // /d/ URL 以 docId 为凭据、永久有效且不可撤销，从地址栏转发出去会绕过分享 token 体系。
+  // 点击时从当前外层 URL 取 query，保住 ?p=（内页路径，经 replaceState 实时更新）和 ?share=（分享凭据）。
+  const openInNewTab = () => {
+    const query = new URLSearchParams(window.location.search)
+    query.set('fullscreen', '1')
+    window.open(prefixed(`/v/${doc.id}?${query.toString()}`), '_blank', 'noopener')
+  }
+
+  const toggleFullscreen = () => {
+    if (fs !== 'off') {
+      if (fs === 'native' && document.fullscreenElement) document.exitFullscreen().catch(() => {})
+      setFs('off')
+      return
+    }
+    const root = document.documentElement
+    if (root.requestFullscreen) {
+      root.requestFullscreen().then(() => setFs('native')).catch(() => setFs('css'))
+    } else {
+      setFs('css')
+    }
+  }
+
+  // Esc / 系统手势退出原生全屏时同步状态
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFs((cur) => (cur === 'native' ? 'off' : cur))
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  // 组件卸载（如文档被删除）时退出原生全屏，避免浏览器停留在全屏的空页面
+  const fsRef = useRef(fs)
+  fsRef.current = fs
+  useEffect(() => () => {
+    if (fsRef.current === 'native' && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    }
+  }, [])
 
   const onClickAI = () => {
     if (!user) {
@@ -516,18 +562,16 @@ export function DocViewer({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild>
-                <a href={src} target="_blank" rel="noreferrer">
-                  <ExternalLink />
-                </a>
+              <Button variant="ghost" size="icon" onClick={openInNewTab}>
+                <ExternalLink />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>新标签打开</TooltipContent>
+            <TooltipContent>新标签全屏打开</TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setFullscreen((f) => !f)}>
+              <Button variant="ghost" size="icon" onClick={toggleFullscreen}>
                 {fullscreen ? <Minimize2 /> : <Maximize2 />}
               </Button>
             </TooltipTrigger>
